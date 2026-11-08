@@ -182,6 +182,34 @@ fn run_ui(cfg: &config::Config, backend: Box<dyn MediaBackend>) -> ExitCode {
     }
 }
 
+fn main() -> ExitCode {
+    let args = match parse_args() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(2);
+        }
+    };
+    let (cfg, notes) = config::load(args.config.as_deref());
+    init_logging(&cfg.log.level);
+    for n in notes {
+        match n.strip_prefix("WARN ") {
+            Some(w) => warn!("{w}"),
+            None => info!("{n}"),
+        }
+    }
+    info!(version = env!("CARGO_PKG_VERSION"), "Impala OS starting");
+
+    let backend = make_backend(&args, &cfg);
+    if let Some(out) = args.screenshot.clone() {
+        return run_screenshot(out, &args, backend);
+    }
+    if args.headless {
+        return headless::run(backend);
+    }
+    run_ui(&cfg, backend)
+}
+
 #[cfg(test)]
 mod touch_tests {
     //! Real hit-testing: synthetic pointer clicks on the actual 1424x280
@@ -242,32 +270,4 @@ mod touch_tests {
         ui.set_backend_ok(false);
         assert_eq!(tap(1128.0, 140.0), None);
     }
-}
-
-fn main() -> ExitCode {
-    let args = match parse_args() {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::from(2);
-        }
-    };
-    let (cfg, notes) = config::load(args.config.as_deref());
-    init_logging(&cfg.log.level);
-    for n in notes {
-        match n.strip_prefix("WARN ") {
-            Some(w) => warn!("{w}"),
-            None => info!("{n}"),
-        }
-    }
-    info!(version = env!("CARGO_PKG_VERSION"), "Impala OS starting");
-
-    let backend = make_backend(&args, &cfg);
-    if let Some(out) = args.screenshot.clone() {
-        return run_screenshot(out, &args, backend);
-    }
-    if args.headless {
-        return headless::run(backend);
-    }
-    run_ui(&cfg, backend)
 }

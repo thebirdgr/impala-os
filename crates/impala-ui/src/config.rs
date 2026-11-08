@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     pub mpd: MpdSection,
@@ -36,11 +36,6 @@ pub struct LogSection {
     pub level: String,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self { mpd: MpdSection::default(), ui: UiSection::default(), log: LogSection::default() }
-    }
-}
 impl Default for MpdSection {
     fn default() -> Self {
         Self { address: "localhost:6600".into() }

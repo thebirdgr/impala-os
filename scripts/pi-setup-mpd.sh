@@ -27,14 +27,11 @@ install -d -m 0755 /etc/systemd/system/mpd.service.d
 install -m 0644 "$here/services/mpd-impala.conf" /etc/systemd/system/mpd.service.d/impala.conf
 install -d -o mpd -g audio -m 0755 /var/lib/mpd/playlists
 
-# Validate before (re)starting so a typo cannot leave MPD down.
-if ! out=$(runuser -u mpd -- mpd --no-daemon --stdout /etc/impala-os/mpd.conf --version 2>&1); then
-    echo "$out" >&2
-fi
-
 systemctl daemon-reload
-systemctl disable --now mpd.socket 2>/dev/null || true
 systemctl enable mpd.service
+# Debian's unit has Also=mpd.socket, so `enable` turns the socket on too.
+# The socket listens on 6600 on every interface; we want loopback only.
+systemctl disable --now mpd.socket
 systemctl restart mpd.service
 sleep 1
 systemctl --no-pager --lines=5 status mpd.service || true

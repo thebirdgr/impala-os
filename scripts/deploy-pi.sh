@@ -35,7 +35,10 @@ echo "==> copying scripts/config/tests and the binary to $target:$remote_dir"
 git ls-files -co --exclude-standard -z -- config scripts services tests docs README.md |
     tar --null -T - -czf - |
     rsh "mkdir -p '$remote_dir/bin' && tar -xzf - -C '$remote_dir' --warning=no-timestamp"
-scp -q "${ssh_opts[@]}" dist/impala-aarch64 "$target:$remote_dir/bin/impala.new"
+# scp needs [brackets] around IPv6 literals (e.g. fe80::…%12 over the cable).
+scp_host="$host"
+[[ $host == *:* ]] && scp_host="[$host]"
+scp -q "${ssh_opts[@]}" dist/impala-aarch64 "${IMPALA_USER:+$IMPALA_USER@}$scp_host:$remote_dir/bin/impala.new"
 
 # Everything below runs on the Pi in one session.
 rsh "REMOTE_DIR='$remote_dir' START=$start bash -s" <<'REMOTE'

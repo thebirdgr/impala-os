@@ -1,0 +1,10 @@
+[package]
+name = "impala-mpd"
+description = "Small blocking MPD protocol client with automatic reconnect for Impala OS"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+impala-core.workspace = true
+tracing.workspace = true

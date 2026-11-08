@@ -1,0 +1,21 @@
+# Impala OS runtime configuration.
+#
+# Looked up in this order (first existing file wins):
+#   --config <file>, $IMPALA_CONFIG, /etc/impala-os/impala.toml,
+#   ~/.config/impala-os/impala.toml, ./config/impala.toml
+# The environment variable IMPALA_MPD_ADDRESS overrides [mpd].address.
+
+[mpd]
+# MPD runs on the same Pi; playback never depends on the network.
+address = "localhost:6600"
+
+[ui]
+# "mpd" for real playback, "mock" for built-in demo data (no daemon).
+backend = "mpd"
+# Volume change per tap on +/-, in percent.
+volume_step = 5
+
+[log]
+# tracing filter syntax; RUST_LOG overrides. Logs go to stderr, which
+# systemd sends to the journal (journalctl -u impala-os).
+level = "info"

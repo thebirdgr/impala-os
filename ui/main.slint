@@ -1,0 +1,503 @@
+// Impala OS head-unit UI.
+//
+// Designed for a 1424x280 ultrawide touch panel. Every size is a multiple
+// of `u`, which is 1px at 1424x280 and scales with the window, so the same
+// layout works in a resized desktop window.
+//
+// Driver-distraction rules: dark, high contrast, no animation, few
+// elements, every touch target at least ~90 px, one-tap actions only.
+
+import { ListView } from "std-widgets.slint";
+
+// Touch actions. Rust maps each one to an impala_core::Command, exactly as
+// a steering-wheel button or a voice intent would be.
+export enum UiCommand { toggle-play, next, prev, vol-up, vol-down, seek, play-queue, load-playlist, load-all, refresh-library }
+
+export enum NetState { unknown, online, offline }
+
+export struct QueueItem {
+    title: string,
+    subtitle: string,
+    duration: string,
+    current: bool,
+}
+
+global Palette {
+    out property <color> bg: #090c11;
+    out property <color> panel: #161c25;
+    out property <color> panel-pressed: #2a3546;
+    out property <color> accent: #f0a020;
+    out property <color> accent-pressed: #b87610;
+    out property <color> on-accent: #121212;
+    out property <color> text: #f3f5f8;
+    out property <color> text-dim: #9aa5b4;
+    out property <color> track: #2a3340;
+    out property <color> good: #4fc3a1;
+    out property <color> warn: #f0a020;
+    out property <color> bad: #e5534b;
+}
+
+component TouchButton inherits Rectangle {
+    in property <length> u: 1px;
+    in property <bool> primary: false;
+    in property <bool> enabled: true;
+    callback clicked();
+    border-radius: 18 * u;
+    background: !enabled ? Palette.panel
+        : ta.pressed ? (primary ? Palette.accent-pressed : Palette.panel-pressed)
+        : (primary ? Palette.accent : Palette.panel);
+    opacity: enabled ? 1.0 : 0.35;
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+    @children
+}
+
+component Glyph inherits Path {
+    in property <length> size: 48px;
+    width: size;
+    height: size;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    fill: Palette.text;
+    stroke-width: 0px;
+}
+
+component ArtTile inherits Rectangle {
+    in property <length> u: 1px;
+    in property <image> art;
+    in property <bool> has-art;
+    in property <string> initials;
+    border-radius: 16 * u;
+    clip: true;
+    background: @linear-gradient(135deg, #24324a 0%, #3b2b45 55%, #6b3f22 100%);
+    if !root.has-art: Text {
+        width: parent.width;
+        height: parent.height;
+        text: root.initials;
+        font-size: 92 * root.u;
+        font-weight: 700;
+        color: #ffffffa0;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    if root.has-art: Image {
+        width: parent.width;
+        height: parent.height;
+        source: root.art;
+        image-fit: cover;
+    }
+}
+
+component Pill inherits Rectangle {
+    in property <length> u: 1px;
+    in property <string> text;
+    in property <color> dot;
+    in property <color> fg: Palette.text-dim;
+    height: 32 * u;
+    border-radius: 16 * u;
+    background: #1a212c;
+    HorizontalLayout {
+        padding-left: 12 * root.u;
+        padding-right: 14 * root.u;
+        spacing: 8 * root.u;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 12 * root.u;
+                height: 12 * root.u;
+                border-radius: 6 * root.u;
+                background: root.dot;
+            }
+        }
+        Text {
+            text: root.text;
+            color: root.fg;
+            font-size: 18 * root.u;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+component ProgressBar inherits Rectangle {
+    in property <length> u: 1px;
+    in property <float> progress;
+    in property <bool> enabled;
+    callback seek(float);
+    min-height: 44 * u;
+    Rectangle {
+        y: (parent.height - self.height) / 2;
+        width: parent.width;
+        height: 10 * root.u;
+        border-radius: 5 * root.u;
+        background: Palette.track;
+        Rectangle {
+            x: 0;
+            width: parent.width * root.progress;
+            height: parent.height;
+            border-radius: parent.border-radius;
+            background: Palette.accent;
+        }
+    }
+    if root.enabled: Rectangle {
+        width: 24 * root.u;
+        height: 24 * root.u;
+        border-radius: 12 * root.u;
+        x: parent.width * root.progress - self.width / 2;
+        y: (parent.height - self.height) / 2;
+        background: Palette.text;
+    }
+    TouchArea {
+        enabled: root.enabled;
+        clicked => { root.seek(self.mouse-x / self.width); }
+    }
+}
+
+component NowPlaying inherits VerticalLayout {
+    in property <length> u: 1px;
+    in property <string> track-title;
+    in property <string> artist;
+    in property <string> album;
+    in property <float> progress;
+    in property <string> elapsed-text;
+    in property <string> duration-text;
+    in property <bool> can-seek;
+    in property <string> status-text;
+    in property <color> status-color;
+    in property <NetState> network;
+    callback seek(float);
+    spacing: 2 * u;
+
+    HorizontalLayout {
+        spacing: 10 * root.u;
+        Pill {
+            u: root.u;
+            text: root.status-text;
+            dot: root.status-color;
+            horizontal-stretch: 1;
+            max-width: 9999px;
+        }
+        Pill {
+            u: root.u;
+            horizontal-stretch: 0;
+            text: root.network == NetState.online ? "Online" : root.network == NetState.offline ? "Offline" : "Network ?";
+            dot: root.network == NetState.online ? Palette.good : Palette.text-dim;
+        }
+    }
+    Rectangle { height: 8 * root.u; }
+    Text {
+        text: root.track-title;
+        font-size: 42 * root.u;
+        font-weight: 700;
+        color: Palette.text;
+        overflow: elide;
+    }
+    Text {
+        text: root.artist;
+        font-size: 28 * root.u;
+        color: Palette.text-dim;
+        overflow: elide;
+    }
+    Text {
+        text: root.album;
+        font-size: 22 * root.u;
+        color: Palette.text-dim;
+        overflow: elide;
+    }
+    Rectangle { vertical-stretch: 1; }
+    ProgressBar {
+        u: root.u;
+        progress: root.progress;
+        enabled: root.can-seek;
+        seek(f) => { root.seek(f); }
+    }
+    HorizontalLayout {
+        Text { text: root.elapsed-text; font-size: 20 * root.u; color: Palette.text-dim; }
+        Rectangle { horizontal-stretch: 1; }
+        Text { text: root.duration-text; font-size: 20 * root.u; color: Palette.text-dim; }
+    }
+}
+
+component ListRow inherits Rectangle {
+    in property <length> u: 1px;
+    in property <string> label;
+    in property <string> sub;
+    in property <string> trailing;
+    in property <bool> highlighted;
+    callback clicked();
+    height: 64 * u;
+    background: ta.pressed ? Palette.panel-pressed : highlighted ? #222b38 : transparent;
+    border-radius: 10 * u;
+    ta := TouchArea { clicked => { root.clicked(); } }
+    HorizontalLayout {
+        padding-left: 14 * root.u;
+        padding-right: 18 * root.u;
+        spacing: 12 * root.u;
+        Rectangle {
+            width: 6 * root.u;
+            background: root.highlighted ? Palette.accent : transparent;
+            border-radius: 3 * root.u;
+        }
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.label;
+                font-size: 24 * root.u;
+                color: root.highlighted ? Palette.accent : Palette.text;
+                overflow: elide;
+            }
+            if root.sub != "": Text {
+                text: root.sub;
+                font-size: 17 * root.u;
+                color: Palette.text-dim;
+                overflow: elide;
+            }
+        }
+        Text {
+            text: root.trailing;
+            font-size: 20 * root.u;
+            color: Palette.text-dim;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component Library inherits HorizontalLayout {
+    in property <length> u: 1px;
+    in property <[QueueItem]> queue;
+    in property <[string]> playlists;
+    in property <bool> enabled;
+    in property <bool> scanning;
+    callback command(UiCommand, int, string);
+    spacing: 12 * u;
+
+    VerticalLayout {
+        width: 300 * root.u;
+        spacing: 8 * root.u;
+        HorizontalLayout {
+            spacing: 8 * root.u;
+            height: 64 * root.u;
+            TouchButton {
+                u: root.u;
+                enabled: root.enabled;
+                clicked => { root.command(UiCommand.load-all, 0, ""); }
+                Text { text: "All tracks"; font-size: 22 * root.u; color: Palette.text; }
+            }
+            TouchButton {
+                u: root.u;
+                enabled: root.enabled && !root.scanning;
+                clicked => { root.command(UiCommand.refresh-library, 0, ""); }
+                Text { text: root.scanning ? "Scanning…" : "Rescan"; font-size: 22 * root.u; color: Palette.text; }
+            }
+        }
+        Rectangle {
+            background: Palette.panel;
+            border-radius: 14 * root.u;
+            vertical-stretch: 1;
+            if root.playlists.length == 0: Text {
+                text: "No playlists";
+                font-size: 20 * root.u;
+                color: Palette.text-dim;
+            }
+            ListView {
+                width: parent.width;
+                height: parent.height;
+                for name in root.playlists: ListRow {
+                    u: root.u;
+                    label: name;
+                    clicked => { root.command(UiCommand.load-playlist, 0, name); }
+                }
+            }
+        }
+    }
+    Rectangle {
+        background: Palette.panel;
+        border-radius: 14 * root.u;
+        horizontal-stretch: 1;
+        if root.queue.length == 0: Text {
+            text: "Queue is empty – pick All tracks or a playlist";
+            font-size: 22 * root.u;
+            color: Palette.text-dim;
+        }
+        ListView {
+            width: parent.width;
+            height: parent.height;
+            for item[i] in root.queue: ListRow {
+                u: root.u;
+                label: item.title;
+                sub: item.subtitle;
+                trailing: item.duration;
+                highlighted: item.current;
+                clicked => { root.command(UiCommand.play-queue, i, ""); }
+            }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "Impala OS";
+    preferred-width: 1424px;
+    preferred-height: 280px;
+    min-width: 712px;
+    min-height: 140px;
+    background: Palette.bg;
+
+    // --- data in (set from Rust) ---
+    in property <string> track-title: "Nothing playing";
+    in property <string> artist;
+    in property <string> album;
+    in property <image> art;
+    in property <bool> has-art;
+    in property <string> art-initials: "♪";
+    in property <bool> playing;
+    in property <float> progress;
+    in property <string> elapsed-text: "0:00";
+    in property <string> duration-text: "";
+    in property <int> duration-secs;
+    in property <int> volume: -1;
+    in property <bool> backend-ok;
+    in property <string> status-text: "Starting…";
+    in property <bool> status-warn;
+    in property <NetState> network;
+    in property <[QueueItem]> queue;
+    in property <[string]> playlists;
+    in property <bool> scanning;
+    in-out property <bool> library-open;
+
+    // --- actions out ---
+    callback command(UiCommand, int, string);
+
+    // 1.0 at 1424x280, scales with the window.
+    property <length> u: min(root.width / 1424, root.height / 280);
+
+    HorizontalLayout {
+        padding: 16 * root.u;
+        spacing: 16 * root.u;
+
+        if !root.library-open: ArtTile {
+            u: root.u;
+            width: 248 * root.u;
+            art: root.art;
+            has-art: root.has-art;
+            initials: root.art-initials;
+        }
+        if !root.library-open: NowPlaying {
+            u: root.u;
+            horizontal-stretch: 1;
+            track-title: root.track-title;
+            artist: root.artist;
+            album: root.album;
+            progress: root.progress;
+            elapsed-text: root.elapsed-text;
+            duration-text: root.duration-text;
+            can-seek: root.backend-ok && root.duration-secs > 0;
+            status-text: root.status-text;
+            status-color: !root.backend-ok ? Palette.bad : root.status-warn ? Palette.warn : Palette.good;
+            network: root.network;
+            seek(f) => { root.command(UiCommand.seek, Math.round(f * root.duration-secs), ""); }
+        }
+        if root.library-open: Library {
+            u: root.u;
+            horizontal-stretch: 1;
+            queue: root.queue;
+            playlists: root.playlists;
+            enabled: root.backend-ok;
+            scanning: root.scanning;
+            command(c, n, s) => {
+                root.command(c, n, s);
+                if c != UiCommand.refresh-library { root.library-open = false; }
+            }
+        }
+
+        // Transport: always visible, full-height targets.
+        HorizontalLayout {
+            spacing: 10 * root.u;
+            TouchButton {
+                u: root.u;
+                width: 104 * root.u;
+                enabled: root.backend-ok;
+                clicked => { root.command(UiCommand.prev, 0, ""); }
+                Glyph { size: 52 * root.u; commands: "M 20 4 L 9 12 L 20 20 Z M 4 4 L 7.5 4 L 7.5 20 L 4 20 Z"; }
+            }
+            TouchButton {
+                u: root.u;
+                width: 136 * root.u;
+                primary: true;
+                enabled: root.backend-ok;
+                clicked => { root.command(UiCommand.toggle-play, 0, ""); }
+                Glyph {
+                    size: 64 * root.u;
+                    fill: Palette.on-accent;
+                    commands: root.playing
+                        ? "M 5 4 L 10 4 L 10 20 L 5 20 Z M 14 4 L 19 4 L 19 20 L 14 20 Z"
+                        : "M 6 3.5 L 20.5 12 L 6 20.5 Z";
+                }
+            }
+            TouchButton {
+                u: root.u;
+                width: 104 * root.u;
+                enabled: root.backend-ok;
+                clicked => { root.command(UiCommand.next, 0, ""); }
+                Glyph { size: 52 * root.u; commands: "M 4 4 L 15 12 L 4 20 Z M 16.5 4 L 20 4 L 20 20 L 16.5 20 Z"; }
+            }
+        }
+
+        // Volume.
+        VerticalLayout {
+            width: 100 * root.u;
+            spacing: 6 * root.u;
+            TouchButton {
+                u: root.u;
+                vertical-stretch: 1;
+                enabled: root.backend-ok && root.volume >= 0;
+                clicked => { root.command(UiCommand.vol-up, 0, ""); }
+                Glyph { size: 40 * root.u; commands: "M 10 3 L 14 3 L 14 10 L 21 10 L 21 14 L 14 14 L 14 21 L 10 21 L 10 14 L 3 14 L 3 10 L 10 10 Z"; }
+            }
+            Rectangle {
+                height: 36 * root.u;
+                Text {
+                    text: root.volume >= 0 ? "VOL \{root.volume}" : "VOL –";
+                    font-size: 20 * root.u;
+                    font-weight: 700;
+                    color: Palette.text;
+                }
+            }
+            TouchButton {
+                u: root.u;
+                vertical-stretch: 1;
+                enabled: root.backend-ok && root.volume >= 0;
+                clicked => { root.command(UiCommand.vol-down, 0, ""); }
+                Glyph { size: 40 * root.u; commands: "M 3 10 L 21 10 L 21 14 L 3 14 Z"; }
+            }
+        }
+
+        // Library / back toggle.
+        TouchButton {
+            u: root.u;
+            width: 96 * root.u;
+            clicked => { root.library-open = !root.library-open; }
+            VerticalLayout {
+                alignment: center;
+                spacing: 8 * root.u;
+                HorizontalLayout {
+                    alignment: center;
+                    Glyph {
+                        size: 44 * root.u;
+                        commands: root.library-open
+                            ? "M 15 4 L 17.5 6.5 L 12 12 L 17.5 17.5 L 15 20 L 7 12 Z"
+                            : "M 3 5 L 21 5 L 21 8 L 3 8 Z M 3 10.5 L 21 10.5 L 21 13.5 L 3 13.5 Z M 3 16 L 15 16 L 15 19 L 3 19 Z";
+                    }
+                }
+                Text {
+                    text: root.library-open ? "Back" : "Library";
+                    font-size: 18 * root.u;
+                    color: Palette.text;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,33 @@
+[package]
+name = "impala-ui"
+description = "Impala OS head-unit app (Slint UI, headless console, screenshot renderer)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+default-run = "impala"
+
+[[bin]]
+name = "impala"
+path = "src/main.rs"
+
+[dependencies]
+impala-core.workspace = true
+impala-mpd.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi", "std"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+serde = { version = "1", features = ["derive"] }
+toml = { version = "1", default-features = false, features = ["parse", "serde"] }
+# Common Slint features. Windowing backends are chosen per target below.
+slint = { version = "1.18", default-features = false, features = ["std", "compat-1-18", "renderer-software", "software-renderer-path", "software-renderer-systemfonts"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Pi: draw straight to DRM/KMS (no desktop session), touch via libinput.
+slint = { version = "1.18", default-features = false, features = ["backend-linuxkms-noseat", "renderer-femtovg"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+# Windows/macOS development: a normal desktop window.
+slint = { version = "1.18", default-features = false, features = ["backend-winit", "renderer-femtovg"] }
+
+[build-dependencies]
+slint-build = "1.18"

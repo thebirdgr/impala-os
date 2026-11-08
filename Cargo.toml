@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["crates/impala-core", "crates/impala-mpd", "crates/impala-ui"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.82"
+
+[workspace.dependencies]
+impala-core = { path = "crates/impala-core" }
+impala-mpd = { path = "crates/impala-mpd" }
+tracing = "0.1"
+
+[profile.release]
+# Keep Pi builds tolerable: thin LTO is too memory hungry on 1.8 GB RAM.
+lto = false
+codegen-units = 16
+debug = false
+strip = true

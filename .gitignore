@@ -1,0 +1,5 @@
+/target
+*.png
+!docs/*.png
+config/deploy.env
+config/impala.local.toml

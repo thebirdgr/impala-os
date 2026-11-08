@@ -24,12 +24,19 @@ impl Platform for OffscreenPlatform {
     }
 }
 
-/// Render `MainWindow` at `width`x`height` physical pixels after `setup`
-/// has filled in its properties, and write a PNG to `out`.
-pub fn render(out: &Path, width: u32, height: u32, setup: impl FnOnce(&MainWindow)) -> Result<(), String> {
+/// Install a display-less Slint platform (once per process) and return its
+/// single window. Used by `--screenshot` and by the touch tests.
+pub fn offscreen_platform() -> Result<Rc<MinimalSoftwareWindow>, String> {
     let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
     slint::platform::set_platform(Box::new(OffscreenPlatform { window: window.clone(), start: Instant::now() }))
         .map_err(|e| format!("set_platform: {e}"))?;
+    Ok(window)
+}
+
+/// Render `MainWindow` at `width`x`height` physical pixels after `setup`
+/// has filled in its properties, and write a PNG to `out`.
+pub fn render(out: &Path, width: u32, height: u32, setup: impl FnOnce(&MainWindow)) -> Result<(), String> {
+    let window = offscreen_platform()?;
     let ui = MainWindow::new().map_err(|e| format!("create UI: {e}"))?;
     window.set_size(PhysicalSize::new(width, height));
     setup(&ui);

@@ -182,6 +182,68 @@ fn run_ui(cfg: &config::Config, backend: Box<dyn MediaBackend>) -> ExitCode {
     }
 }
 
+#[cfg(test)]
+mod touch_tests {
+    //! Real hit-testing: synthetic pointer clicks on the actual 1424x280
+    //! layout, through the same `on_command` → `map_ui_command` path the
+    //! app uses. One test function because the Slint platform is global.
+    use super::*;
+    use impala_core::{Command, PlaylistSource};
+    use slint::platform::{PointerEventButton, WindowEvent};
+    use slint::{LogicalPosition, PhysicalSize};
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    #[test]
+    fn touch_targets_emit_shared_commands() {
+        let window = screenshot::offscreen_platform().unwrap();
+        let ui = MainWindow::new().unwrap();
+        window.set_size(PhysicalSize::new(1424, 280));
+        ui.set_backend_ok(true);
+        ui.set_volume(50);
+        ui.set_duration_secs(200);
+        ui.show().unwrap();
+
+        let got: Rc<RefCell<Vec<Option<Command>>>> = Rc::default();
+        let sink = got.clone();
+        ui.on_command(move |c, n, s| sink.borrow_mut().push(bridge::map_ui_command(c, n, &s, 5)));
+
+        let tap = |x: f32, y: f32| -> Option<Command> {
+            let position = LogicalPosition::new(x, y);
+            let button = PointerEventButton::Left;
+            window.dispatch_event(WindowEvent::PointerMoved { position });
+            window.dispatch_event(WindowEvent::PointerPressed { position, button });
+            window.dispatch_event(WindowEvent::PointerReleased { position, button });
+            window.dispatch_event(WindowEvent::PointerExited);
+            got.borrow_mut().pop().flatten()
+        };
+
+        // Coordinates from docs/screenshots/now-playing-1424x280.png.
+        assert_eq!(tap(868.0, 140.0), Some(Command::Prev));
+        assert_eq!(tap(998.0, 140.0), Some(Command::TogglePlayPause));
+        assert_eq!(tap(1128.0, 140.0), Some(Command::Next));
+        assert_eq!(tap(1246.0, 66.0), Some(Command::ChangeVolume(5)));
+        assert_eq!(tap(1246.0, 214.0), Some(Command::ChangeVolume(-5)));
+        // Middle of the progress bar → seek to ~half of 200 s.
+        match tap(540.0, 212.0) {
+            Some(Command::Seek(d)) => assert!((95..=105).contains(&d.as_secs()), "{d:?}"),
+            other => panic!("expected seek, got {other:?}"),
+        }
+        // Dead zone (art tile) does nothing.
+        assert_eq!(tap(140.0, 140.0), None);
+
+        // Library: open, pick "All tracks", panel closes again.
+        assert_eq!(tap(1360.0, 140.0), None);
+        assert!(ui.get_library_open());
+        assert_eq!(tap(90.0, 48.0), Some(Command::LoadPlaylist(PlaylistSource::AllTracks)));
+        assert!(!ui.get_library_open());
+
+        // Backend down: transport is disabled, taps are swallowed.
+        ui.set_backend_ok(false);
+        assert_eq!(tap(1128.0, 140.0), None);
+    }
+}
+
 fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(a) => a,

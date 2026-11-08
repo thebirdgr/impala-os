@@ -11,3 +11,4 @@ config/impala.local.toml
 # Ad-hoc previews; the curated ones under docs/screenshots are committed
 *.png
 !docs/screenshots/*.png
+/dist

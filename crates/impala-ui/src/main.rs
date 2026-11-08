@@ -36,10 +36,11 @@ struct Args {
     size: Option<(u32, u32)>,
     library: bool,
     headless: bool,
+    version: bool,
 }
 
 const USAGE: &str = "usage: impala [--config FILE] [--mock] [--mpd HOST:PORT] \
-[--screenshot OUT.png [--size WxH] [--library]] [--headless]";
+[--screenshot OUT.png [--size WxH] [--library]] [--headless] [--version]";
 
 fn parse_args() -> Result<Args, String> {
     let mut a = Args::default();
@@ -62,6 +63,7 @@ fn parse_args() -> Result<Args, String> {
             }
             "--library" => a.library = true,
             "--headless" => a.headless = true,
+            "-V" | "--version" => a.version = true,
             "-h" | "--help" => return Err(USAGE.into()),
             other => return Err(format!("unknown argument {other}\n{USAGE}")),
         }
@@ -190,6 +192,15 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if args.version {
+        println!(
+            "impala {} ({}-{})",
+            env!("CARGO_PKG_VERSION"),
+            std::env::consts::ARCH,
+            std::env::consts::OS
+        );
+        return ExitCode::SUCCESS;
+    }
     let (cfg, notes) = config::load(args.config.as_deref());
     init_logging(&cfg.log.level);
     for n in notes {

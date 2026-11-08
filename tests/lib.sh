@@ -1,7 +1,10 @@
 # Shared helpers for the on-Pi test scripts. Source, don't run.
 # shellcheck shell=bash
 
-BIN=${BIN:-target/release/impala}
+# Deployed binary (scripts/deploy-pi.sh) first, then a native Pi build.
+if [[ -z ${BIN:-} ]]; then
+    if [[ -x bin/impala ]]; then BIN=bin/impala; else BIN=target/release/impala; fi
+fi
 LOG=${LOG:-/tmp/impala-test.log}
 fails=0
 passes=0

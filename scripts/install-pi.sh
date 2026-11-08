@@ -10,7 +10,8 @@ set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo" >&2; exit 1; }
 here="$(cd "$(dirname "$0")/.." && pwd)"
 
-install -m 0755 "$here/target/release/impala" /usr/local/bin/impala
+bin="$here/bin/impala"; [[ -x $bin ]] || bin="$here/target/release/impala"
+install -m 0755 "$bin" /usr/local/bin/impala
 install -d -m 0755 /etc/impala-os
 [[ -f /etc/impala-os/impala.toml ]] || install -m 0644 "$here/config/impala.toml" /etc/impala-os/impala.toml
 install -m 0644 "$here/services/impala-os@.service" /etc/systemd/system/impala-os@.service

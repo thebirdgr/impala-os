@@ -42,27 +42,82 @@ The headless console accepts the `Command` text syntax: `play`, `pause`,
 Logging uses `tracing` on stderr. Set `[log] level` in the config or
 `RUST_LOG=impala_mpd=debug,info`.
 
+## Workflow
+
+All development, compiling and testing happens on the PC. The Pi is the
+hardware test target:
+
+```
+edit → cargo test / cargo run --mock (PC) → scripts/deploy-pi.sh (cross-build + copy + restart) → test on the Pi
+```
+
+## PC: one-time ARM64 cross-build setup (WSL2)
+
+The Pi binary is built in WSL2 Ubuntu 24.04 with Ubuntu's `aarch64-linux-gnu`
+cross gcc. It links against a **sysroot copied from the Pi**, so headers,
+libraries and glibc are exactly Raspberry Pi OS trixie's.
+
+```bash
+wsl -d Ubuntu-24.04 -u root -- bash scripts/setup-wsl-cross.sh <your-wsl-user>
+```
+
+Installs amd64 packages only: the cross gcc/g++, `pkg-config`, `rustup`
+(from apt) and the `aarch64-unknown-linux-gnu` Rust target.
+
+```bash
+scripts/make-pi-sysroot.sh
+```
+
+Copies the `-dev` packages Slint links against (fontconfig, freetype,
+xkbcommon, libinput, udev, gbm, drm, libc) plus their installed dependency
+closure from the Pi: 128 packages, 86 MB compressed, 269 MB unpacked at
+`~/.cache/impala-os/sysroot` in WSL. Re-run it after `apt upgrade` on the
+Pi.
+
+**Don't use Ubuntu multiarch instead** (`dpkg --add-architecture arm64` and
+`lib*-dev:arm64`). On 24.04 it pulls in `python3:arm64`, which replaces the
+host's amd64 python3 and removes about 50 packages: cloud-init, ubuntu-wsl,
+wsl-pro-service, unattended-upgrades and more. This happened during M1 and
+was rolled back (see TESTING.md).
+
+## Build and deploy (from the PC, Git Bash)
+
+```bash
+scripts/build-pi.sh
+```
+
+Cross-compiles to `dist/impala-aarch64` (git-ignored). From Git Bash it
+runs inside WSL; the target dir lives at `~/.cache/impala-os/target` in WSL.
+
+```bash
+scripts/deploy-pi.sh
+```
+
+The one-command deploy:
+1. Builds (unless `--no-build`).
+2. Copies `config/ scripts/ services/ tests/ docs/` and the binary to
+   `~/impala-os/` on the Pi (the binary goes to `bin/impala`).
+3. Checks the new binary runs (`--version`).
+4. Stops a running instance: SIGTERM, then SIGKILL after 5 s.
+5. Swaps the binary in atomically.
+6. Renders a frame from the live MPD state as a no-display health check.
+7. Starts the UI (or restarts the systemd unit if enabled), unless
+   `--no-start`.
+8. Reports `RUNNING`, or `NOT RUNNING: no display available (exit 3)` while
+   no screen is attached.
+
+The Pi needs no Rust toolchain for this path.
+
 ## Pi: one-time setup
 
-Run these on the Pi (Raspberry Pi OS trixie, arm64). Every change is listed
-in [PI-CHANGES.md](PI-CHANGES.md).
+On the Pi (Raspberry Pi OS trixie, arm64). Every change is listed in
+[PI-CHANGES.md](PI-CHANGES.md).
 
 ```bash
-sudo apt install mpd mpc rustup build-essential libfontconfig1-dev libfreetype-dev \
-     libxkbcommon-dev libinput-dev libudev-dev libgbm-dev libdrm-dev
+sudo apt install mpd mpc
 ```
 
-```bash
-rustup default stable
-```
-
-From the PC, copy the repo over without building yet:
-
-```bash
-scripts/deploy.sh --no-build
-```
-
-Back on the Pi:
+Then, after the first `scripts/deploy-pi.sh` has copied the scripts:
 
 ```bash
 cd ~/impala-os && sudo scripts/pi-setup-mpd.sh "$USER"
@@ -72,33 +127,29 @@ cd ~/impala-os && sudo scripts/pi-setup-mpd.sh "$USER"
 scripts/make-test-audio.sh /srv/music --playlists
 ```
 
-## Deploy (from the PC, Git Bash or any POSIX shell)
-
-```bash
-scripts/deploy.sh
-```
+## Fallback: build natively on the Pi (slow)
 
 ```bash
 scripts/deploy.sh --background
 ```
 
-- The first form copies the tracked and untracked (non-ignored) files with
-  `tar | ssh`, then runs `cargo build --release --locked -j2` on the Pi.
-- `--background` builds detached instead and logs to `~/impala-os/build.log`
-  on the Pi.
-- Files deleted locally are not deleted on the Pi.
-
-Build times on the Pi 4 (1.8 GB RAM, `-j2`): see [TESTING.md](TESTING.md).
-Incremental rebuilds after UI or Rust changes only recompile `impala-ui`.
+- Copies the whole tree with `tar | ssh` and runs `cargo build --release
+  --locked -j2` on the Pi, logging to `~/impala-os/build.log`.
+- Needs `rustup build-essential libfontconfig1-dev libfreetype-dev
+  libxkbcommon-dev libinput-dev libudev-dev libgbm-dev libdrm-dev` on the
+  Pi.
+- A cold build took well over 30 minutes at 71–75 °C and was interrupted
+  once by an unexplained reboot (see TESTING.md), which is why the PC
+  cross-build is the default.
 
 ## Run on the Pi
 
 ```bash
 cd ~/impala-os
-target/release/impala --screenshot /tmp/impala.png           # preview from live MPD state
-target/release/impala --headless                             # control MPD from the console
-target/release/impala                                        # real UI on the panel (linuxkms)
-tests/pi-smoke.sh                                            # end-to-end test (uses sudo to restart MPD)
+bin/impala --screenshot /tmp/impala.png           # preview from live MPD state
+bin/impala --headless                             # control MPD from the console
+bin/impala                                        # real UI on the panel (linuxkms)
+tests/pi-smoke.sh                                 # end-to-end test (uses sudo to restart MPD)
 ```
 
 Copy a preview back to the PC:
@@ -122,7 +173,7 @@ Useful Slint variables:
 ## Optional autostart (not enabled)
 
 ```bash
-cargo build --release && sudo scripts/install-pi.sh
+sudo scripts/install-pi.sh
 ```
 
 ```bash

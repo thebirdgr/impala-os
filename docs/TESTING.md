@@ -46,7 +46,8 @@ The Pi runs are recorded below.
 | `tests/pi-smoke.sh` | **33 passed, 0 failed.** Transport (play/pause/toggle/next/prev, prev-restarts after 3 s, seek, track N), volume (abs/±), playlists, all tracks, library refresh, corrupt file (MPD "Failed to decode", app alive), missing file (renamed after scan: error shown, app alive), `systemctl restart mpd` (auto-reconnect, commands work), MPD stopped (status Disconnected, command error logged, no crash) then started (playing again), clean quit, no panics, screenshot from live MPD, no-display exit 3 with clear log message |
 | `tests/pi-offline-test.sh --already-offline` | **13 passed, 0 failed.** No default route, DNS fails; app shows Offline; MPD connected; playback, next, pause/resume, volume, playlist load and 20 s of continuous playback work; MPD never reconnected |
 | Live preview from the Pi | `docs/screenshots/pi-live-mpd-1424x280.png` (rendered on the Pi by the software renderer from real MPD state) |
-| MPD → 3.5 mm jack | ALSA `bcm2835 Headphones` PCM state `RUNNING`, elapsed advancing (`mpc`). **Not heard:** no one listened; needs headphones |
+| MPD → 3.5 mm jack | ALSA `bcm2835 Headphones` PCM state `RUNNING`, elapsed advancing (`mpc`). Not listened to |
+| MPD → Bluetooth AirPods (PipeWire, A2DP) | App `--headless` loaded "Favourites"; PipeWire showed the MPD stream `[active]` on the AirPods sink. **Heard by the user:** "yes i can hear on my airpods" |
 
 ### Offline test: what was and wasn't run
 - **Approved:** the user said "Approve offline test" for the
@@ -109,8 +110,9 @@ The Pi runs are recorded below.
   NetworkManager. That's the user's call; untouched.
 - **Display:** console boot is needed for the KMS UI. This is a boot config
   change and needs approval. Panel and touch are untested.
-- **Audio:** played to the 3.5 mm jack, but nobody has listened yet. The
-  USB DAC to the Alpine unit isn't available.
+- **Audio:** confirmed audible on Bluetooth AirPods (via PipeWire). The
+  3.5 mm jack hasn't been listened to. The USB DAC to the Alpine unit isn't
+  available.
 - **Clock:** the Pi has no RTC and no network time while offline, so after
   a reboot its clock was about 3.5 min behind.
 - **Not available yet:** CAN board, GPS, cellular and the Navidrome server.

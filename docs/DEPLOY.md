@@ -146,16 +146,25 @@ sudo systemctl disable --now impala-os@$USER
 - The unit restarts the app every 5 s while no display is connected (exit
   code 3).
 
-## Offline test (Wi-Fi off, over the Ethernet link-local path)
-
-Find the Pi's IPv6 link-local address with `ip -6 addr show eth0` on the Pi,
-and the PC's interface index with `Get-NetAdapter` in PowerShell. Then, from
-the PC:
-
-```bash
-ssh <user>@fe80::<pi-address>%<pc-interface-index> 'cd impala-os && tests/pi-offline-test.sh'
-```
+## Offline test (Wi-Fi off)
 
 The script disconnects `wlan0` with `nmcli`, checks playback and controls,
 reconnects, and checks clean recovery. A systemd timer reconnects Wi-Fi
 after 5 minutes even if the script dies.
+
+The SSH session over Wi-Fi drops with it, so start the script detached:
+
+```bash
+ssh impala.local 'cd impala-os && setsid nohup tests/pi-offline-test.sh > /tmp/impala-offline-result.txt 2>&1 < /dev/null &'
+```
+
+About 90 s later, once Wi-Fi is back, read the result:
+
+```bash
+ssh impala.local cat /tmp/impala-offline-result.txt
+```
+
+A link that survives Wi-Fi going down (the direct Ethernet cable) would let
+you watch it live. Currently it doesn't work: NetworkManager's `netplan-eth0`
+profile wants DHCP, fails on the direct cable, and drops the IPv6
+link-local address (see TESTING.md, blockers).

@@ -2,9 +2,12 @@
 # Offline test ON THE PI. Disconnects Wi-Fi (the Pi's only internet route),
 # checks that playback and controls keep working, then reconnects.
 #
-# Run it over the Ethernet IPv6 link-local path so the SSH session survives
-# the Wi-Fi drop, e.g. from the PC:
-#   ssh <user>@fe80::<pi-addr>%<if-index> 'cd impala-os && tests/pi-offline-test.sh'
+# The SSH session over Wi-Fi dies when wlan0 goes down, so run it detached
+# and read the result after Wi-Fi is back (~90 s):
+#   ssh <pi> 'cd impala-os && setsid nohup tests/pi-offline-test.sh \
+#             > /tmp/impala-offline-result.txt 2>&1 < /dev/null &'
+#   ssh <pi> cat /tmp/impala-offline-result.txt
+# (Or run it in the foreground over a link that survives, e.g. Ethernet.)
 #
 # Safety net: a transient systemd timer reconnects wlan0 after 5 minutes
 # even if this script dies half way.
@@ -19,6 +22,7 @@ has_default_route() { ip -4 route show default | grep -q .; }
 [[ -x $BIN ]] || { echo "build first" >&2; exit 2; }
 has_default_route || { echo "no default route before the test; aborting" >&2; exit 2; }
 
+sudo systemctl stop impala-wifi-safety.timer impala-wifi-safety.service 2>/dev/null || true
 sudo systemd-run --quiet --unit impala-wifi-safety --on-active=300 /usr/bin/nmcli dev connect "$IFACE"
 trap 'sudo nmcli dev connect "$IFACE" >/dev/null 2>&1; sudo systemctl stop impala-wifi-safety.timer 2>/dev/null' EXIT
 

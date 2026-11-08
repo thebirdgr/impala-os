@@ -6,7 +6,7 @@ configuration, SSH, the firewall, partitions or boot config.
 
 | # | Change | By | Undo |
 |---|---|---|---|
-| 1 | `/etc/sudoers.d/90-impala` (`<user> ALL=(ALL) NOPASSWD:ALL`): the earlier cloud-init NOPASSWD entry was gone when M1 started. An `apt full-upgrade` ran at 13:21, before M1; whether it removed the entry is unconfirmed. | Outside this session, 13:36, after Claude asked for option (a) restore or (b) manual apt. Claude did not edit sudoers. | `sudo rm /etc/sudoers.d/90-impala` |
+| 1 | `/etc/sudoers.d/90-impala` (`<user> ALL=(ALL) NOPASSWD:ALL`, 0440 root:root, passes `visudo -c`): the earlier cloud-init NOPASSWD entry was gone when M1 started. An `apt full-upgrade` ran at 13:21, before M1; whether it removed the entry is unconfirmed. | Created 13:36 outside this session after the user chose option (a), "Passwordless sudo (a)". Claude did not edit sudoers. | `sudo rm /etc/sudoers.d/90-impala` |
 | 2 | apt: `mpd mpc rustup build-essential libfontconfig1-dev libfreetype-dev libxkbcommon-dev libinput-dev libudev-dev libgbm-dev libdrm-dev` (plus their dependencies) | Outside this session, 13:36 (apt history), the approved list | `sudo apt remove <same list> && sudo apt autoremove` |
 | 3 | `rustup default stable`: Rust 1.99.1 in `~/.rustup` and `~/.cargo` (per user, no sudo) | Claude | `rustup self uninstall` or `rm -rf ~/.rustup ~/.cargo` |
 | 4 | `/srv/music` created, owned by the login user, group `audio`, mode 0755 | Claude via `scripts/pi-setup-mpd.sh` | `sudo rm -r /srv/music` |

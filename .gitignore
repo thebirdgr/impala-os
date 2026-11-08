@@ -1,5 +1,13 @@
 /target
-*.png
-!docs/*.png
+build.log
+# Local deploy settings and machine-specific config
 config/deploy.env
 config/impala.local.toml
+# Generated media: test audio is made on the Pi by scripts/make-test-audio.sh
+*.flac
+*.mp3
+*.ogg
+*.wav
+# Ad-hoc previews; the curated ones under docs/screenshots are committed
+*.png
+!docs/screenshots/*.png

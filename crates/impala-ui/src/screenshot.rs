@@ -5,7 +5,7 @@
 use crate::MainWindow;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::platform::{Platform, WindowAdapter};
-use slint::{PhysicalSize, PlatformError, Rgb8Pixel};
+use slint::{ComponentHandle, PhysicalSize, PlatformError, Rgb8Pixel};
 use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, Instant};

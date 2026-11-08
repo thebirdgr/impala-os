@@ -71,7 +71,9 @@ component ArtTile inherits Rectangle {
     in property <string> initials;
     border-radius: 16 * u;
     clip: true;
-    background: @linear-gradient(135deg, #24324a 0%, #3b2b45 55%, #6b3f22 100%);
+    // Axis-aligned: diagonal gradients show a seam in the software renderer
+    // at fractional scale factors.
+    background: @linear-gradient(180deg, #24324a 0%, #3b2b45 55%, #6b3f22 100%);
     if !root.has-art: Text {
         width: parent.width;
         height: parent.height;
@@ -370,10 +372,21 @@ export component MainWindow inherits Window {
     // --- actions out ---
     callback command(UiCommand, int, string);
 
-    // 1.0 at 1424x280, scales with the window.
-    property <length> u: min(root.width / 1424, root.height / 280);
+    // 1px at 1424x280, scales with the window. Updated from change handlers
+    // rather than a binding: sizes depend on `u`, and the window's layout
+    // constraints depend on those sizes, which would be a binding loop.
+    property <length> u: 1px;
+    function rescale() { root.u = max(0.25px, min(root.width / 1424, root.height / 280)); }
+    init => { root.rescale(); }
+    changed width => { root.rescale(); }
+    changed height => { root.rescale(); }
 
+    // Keep the ultrawide proportions in taller desktop windows (letterbox).
     HorizontalLayout {
+        x: 0;
+        width: root.width;
+        height: min(root.height, 280 * root.u);
+        y: (root.height - self.height) / 2;
         padding: 16 * root.u;
         spacing: 16 * root.u;
 

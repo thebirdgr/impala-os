@@ -1,0 +1,30 @@
+# Optional autostart unit for the Impala OS UI. NOT enabled by default.
+#
+# Install (see docs/DEPLOY.md):   sudo scripts/install-pi.sh
+# Enable for a login user:        sudo systemctl enable --now impala-os@<user>
+#
+# The UI draws directly to DRM/KMS, so nothing else may own the display:
+# boot to multi-user.target (no labwc desktop) before enabling this.
+[Unit]
+Description=Impala OS head unit (Slint, DRM/KMS)
+Documentation=file:///usr/local/share/doc/impala-os/README.md
+After=mpd.service systemd-udevd.service
+Wants=mpd.service
+
+[Service]
+Type=simple
+User=%i
+SupplementaryGroups=video render input audio
+ExecStart=/usr/local/bin/impala --config /etc/impala-os/impala.toml
+# Exit code 3 = no display connected yet. Keep retrying without spamming.
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=0
+SyslogIdentifier=impala-os
+# Logs: journalctl -u impala-os@<user> -f
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

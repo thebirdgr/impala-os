@@ -18,6 +18,7 @@ only network change is #11, approved by the user.
 | 10 | `~/impala-os`: repo copy, `bin/impala` (cross-built), partial native build output (`target/`, `build.log`) | Claude via `scripts/deploy.sh` / `deploy-pi.sh` | `rm -rf ~/impala-os` |
 | 11 | NetworkManager profile `netplan-eth0`: `ipv4.method auto → link-local`, `ipv6.method auto → link-local` (persisted by netplan in `/etc/netplan/90-NM-75a1216a-….yaml`). eth0 now keeps 169.254.x.x and fe80:: on the direct PC cable instead of retrying DHCP. | Claude, **approved by the user** ("Yes, fix eth0") | `sudo nmcli con mod netplan-eth0 ipv4.method auto ipv6.method auto && sudo nmcli con up netplan-eth0` |
 | 12 | `~/memwatch.log`, `/tmp/mw*.sh`: build-time memory/temperature logger (stopped) | Claude | `rm ~/memwatch.log` |
+| 13 | MPD second output `PipeWire (Bluetooth)` (type `pulse`, server 127.0.0.1) in `/etc/impala-os/mpd.conf`; `~/.config/pipewire/pipewire-pulse.conf.d/90-impala-mpd.conf` makes pipewire-pulse also listen on `tcp:127.0.0.1:4713` (loopback only). Lets the system MPD play to the desktop session's default sink: the AirPods (A2DP). AirPods sink volume set to 0.40. | Claude, at the user's request ("play the audio? i am connected via airpods") | Delete the drop-in, `systemctl --user restart pipewire-pulse`; remove the `pulse` block from `config/mpd.conf`, re-run `sudo scripts/pi-setup-mpd.sh` |
 
 ## Changes made by LIVI (not by Claude)
 
